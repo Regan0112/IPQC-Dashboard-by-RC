@@ -1,0 +1,2614 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPQC 巡檢品質趨勢與異常分析系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS for Excel Parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .dropdown-menu { display: none; }
+        .dropdown-menu.show { display: block; }
+    </style>
+</head>
+<body class="h-full text-slate-800 flex flex-col custom-scrollbar">
+
+    <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2 rounded-lg text-white shadow-sm">
+                    <i class="fa-solid fa-clipboard-check text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight">IPQC 巡檢品質趨勢與異常分析系統</h1>
+                    <p class="text-xs text-slate-400">In-Process Quality Control Multi-Dimensional Analytics</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <!-- File Upload Button -->
+                <label class="cursor-pointer inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-lg text-xs font-semibold transition shadow-sm border border-indigo-500">
+                    <i class="fa-solid fa-file-excel text-sm"></i>
+                    <span>匯入巡檢 Excel (.xlsx/.csv)</span>
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls, .xlsm, .csv" class="hidden">
+                </label>
+                <!-- Clear Loaded Data Button -->
+                <button id="clearDataBtn" class="inline-flex items-center space-x-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 hover:text-rose-100 px-3 py-2 rounded-lg text-xs font-medium transition border border-rose-800/60" title="清空所有數據">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span class="hidden sm:inline">清空數據</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="dashboardMain" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Multi-Dimensional Dynamic Filter Controls Bar -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 transition-all relative z-30">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                <div class="flex items-center space-x-2 text-slate-700 font-semibold text-sm">
+                    <i class="fa-solid fa-filter text-indigo-600"></i>
+                    <span>多維度動態篩選器 (支援日期時間區間與項目多選)</span>
+                </div>
+                <button id="clearFiltersBtn" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center space-x-1 hover:underline">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>重置所有篩選條件</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+
+                <div class="col-span-1 sm:col-span-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                        <label class="text-xs font-semibold text-slate-700 flex items-center space-x-1">
+                            <i class="fa-regular fa-calendar text-indigo-600"></i>
+                            <span>A欄: 巡檢日期區間 (IPQC Date)</span>
+                        </label>
+                        <div class="space-x-1 flex items-center flex-wrap gap-y-1">
+                            <!-- Recent Days Dropdown (2-31 days) -->
+                            <select id="recentDaysSelect" class="text-[10px] bg-white border border-slate-300 text-slate-600 px-1.5 py-0.5 rounded hover:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <option value="">近幾天...</option>
+                            </select>
+                            <!-- Feature 1: Recent Weeks Dropdown (1-10 weeks) & Week Range Options -->
+                            <select id="recentWeeksSelect" class="text-[10px] bg-white border border-slate-300 text-slate-600 px-1.5 py-0.5 rounded hover:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <option value="">近幾周...</option>
+                            </select>
+                            <button id="singleDateBtn" class="text-[10px] bg-white border border-slate-300 text-slate-600 px-2 py-0.5 rounded hover:bg-slate-100">最新單日</button>
+                            <button id="resetDateRangeBtn" class="text-[10px] bg-white border border-slate-300 text-slate-600 px-2 py-0.5 rounded hover:bg-slate-100">全區間</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <span class="text-[10px] text-slate-400 block mb-0.5" id="startDateLabel">起始日期</span>
+                            <input type="date" id="startDateFilter" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <input type="week" id="startWeekFilter" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none hidden">
+                        </div>
+                        <div id="endDateContainer">
+                            <span class="text-[10px] text-slate-400 block mb-0.5" id="endDateLabel">結束日期</span>
+                            <input type="date" id="endDateFilter" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <input type="week" id="endWeekFilter" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none hidden">
+                        </div>
+                    </div>
+                    <div class="mt-2 flex items-center space-x-4 text-xs font-medium text-slate-600 pt-1 border-t border-slate-200/60">
+                        <span class="text-[10px] text-slate-400">區間單位:</span>
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="radio" name="dateMode" value="date" checked class="text-indigo-600 focus:ring-indigo-500 h-3 w-3">
+                            <span class="ml-1 text-[11px]">按日期 (日)</span>
+                        </label>
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="radio" name="dateMode" value="week" class="text-indigo-600 focus:ring-indigo-500 h-3 w-3">
+                            <span class="ml-1 text-[11px]">按周別 (周)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Time Range Filter -->
+                <div class="col-span-1 sm:col-span-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-semibold text-slate-700 flex items-center space-x-1">
+                            <i class="fa-regular fa-clock text-indigo-600"></i>
+                            <span>B欄: 巡檢時間時段 (IPQC Time)</span>
+                        </label>
+                        <button id="resetTimeRangeBtn" class="text-[10px] bg-white border border-slate-300 text-slate-600 px-2 py-0.5 rounded hover:bg-slate-100">全時段</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <span class="text-[10px] text-slate-400 block mb-0.5">起始時間</span>
+                            <input type="time" id="startTimeFilter" value="00:00" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-400 block mb-0.5">結束時間</span>
+                            <input type="time" id="endTimeFilter" value="23:59" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Multi-Select Dropdowns for All Dimensions -->
+                <div class="relative multi-select-container" id="container-result">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">J欄: 巡檢結果 (Result)</label>
+                    <button type="button" class="dropdown-toggle w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-left text-xs text-slate-700 flex justify-between items-center focus:ring-2 focus:ring-indigo-500">
+                        <span class="selected-text truncate">無數據</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px]"></i>
+                    </button>
+                    <div class="dropdown-menu absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 text-[11px]">
+                            <button type="button" class="select-all text-indigo-600 hover:underline font-medium">全選</button>
+                            <button type="button" class="deselect-all text-slate-400 hover:underline">取消全選</button>
+                        </div>
+                        <div class="options-list space-y-1"></div>
+                    </div>
+                </div>
+
+                <div class="relative multi-select-container" id="container-model">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">D欄: 機種 (Model)</label>
+                    <button type="button" class="dropdown-toggle w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-left text-xs text-slate-700 flex justify-between items-center focus:ring-2 focus:ring-indigo-500">
+                        <span class="selected-text truncate">無數據</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px]"></i>
+                    </button>
+                    <div class="dropdown-menu absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 text-[11px]">
+                            <button type="button" class="select-all text-indigo-600 hover:underline font-medium">全選</button>
+                            <button type="button" class="deselect-all text-slate-400 hover:underline">取消全選</button>
+                        </div>
+                        <div class="options-list space-y-1"></div>
+                    </div>
+                </div>
+
+                <div class="relative multi-select-container" id="container-station">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">E欄: 站點 (Station)</label>
+                    <button type="button" class="dropdown-toggle w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-left text-xs text-slate-700 flex justify-between items-center focus:ring-2 focus:ring-indigo-500">
+                        <span class="selected-text truncate">無數據</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px]"></i>
+                    </button>
+                    <div class="dropdown-menu absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 text-[11px]">
+                            <button type="button" class="select-all text-indigo-600 hover:underline font-medium">全選</button>
+                            <button type="button" class="deselect-all text-slate-400 hover:underline">取消全選</button>
+                        </div>
+                        <div class="options-list space-y-1"></div>
+                    </div>
+                </div>
+
+                <div class="relative multi-select-container" id="container-item">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">F欄: 巡檢項目 (Item)</label>
+                    <button type="button" class="dropdown-toggle w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-left text-xs text-slate-700 flex justify-between items-center focus:ring-2 focus:ring-indigo-500">
+                        <span class="selected-text truncate">無數據</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px]"></i>
+                    </button>
+                    <div class="dropdown-menu absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 text-[11px]">
+                            <button type="button" class="select-all text-indigo-600 hover:underline font-medium">全選</button>
+                            <button type="button" class="deselect-all text-slate-400 hover:underline">取消全選</button>
+                        </div>
+                        <div class="options-list space-y-1"></div>
+                    </div>
+                </div>
+
+                <div class="relative multi-select-container" id="container-inspector">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">C欄: 巡檢員 (Inspector)</label>
+                    <button type="button" class="dropdown-toggle w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-left text-xs text-slate-700 flex justify-between items-center focus:ring-2 focus:ring-indigo-500">
+                        <span class="selected-text truncate">無數據</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px]"></i>
+                    </button>
+                    <div class="dropdown-menu absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 text-[11px]">
+                            <button type="button" class="select-all text-indigo-600 hover:underline font-medium">全選</button>
+                            <button type="button" class="deselect-all text-slate-400 hover:underline">取消全選</button>
+                        </div>
+                        <div class="options-list space-y-1"></div>
+                    </div>
+                </div>
+
+                <div class="relative multi-select-container" id="container-machineNo">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">H欄: 機台財編 (Machine No)</label>
+                    <button type="button" class="dropdown-toggle w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-left text-xs text-slate-700 flex justify-between items-center focus:ring-2 focus:ring-indigo-500">
+                        <span class="selected-text truncate">無數據</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px]"></i>
+                    </button>
+                    <div class="dropdown-menu absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 text-[11px]">
+                            <button type="button" class="select-all text-indigo-600 hover:underline font-medium">全選</button>
+                            <button type="button" class="deselect-all text-slate-400 hover:underline">取消全選</button>
+                        </div>
+                        <div class="options-list space-y-1"></div>
+                    </div>
+                </div>
+
+                <div class="relative multi-select-container" id="container-opId">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">I欄: 人員工號 (OP ID)</label>
+                    <button type="button" class="dropdown-toggle w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-left text-xs text-slate-700 flex justify-between items-center focus:ring-2 focus:ring-indigo-500">
+                        <span class="selected-text truncate">無數據</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px]"></i>
+                    </button>
+                    <div class="dropdown-menu absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 text-[11px]">
+                            <button type="button" class="select-all text-indigo-600 hover:underline font-medium">全選</button>
+                            <button type="button" class="deselect-all text-slate-400 hover:underline">取消全選</button>
+                        </div>
+                        <div class="options-list space-y-1"></div>
+                    </div>
+                </div>
+
+                <div class="relative multi-select-container" id="container-workOrder">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">M欄: 工單 (Work Order)</label>
+                    <button type="button" class="dropdown-toggle w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-left text-xs text-slate-700 flex justify-between items-center focus:ring-2 focus:ring-indigo-500">
+                        <span class="selected-text truncate">無數據</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px]"></i>
+                    </button>
+                    <div class="dropdown-menu absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 text-[11px]">
+                            <button type="button" class="select-all text-indigo-600 hover:underline font-medium">全選</button>
+                            <button type="button" class="deselect-all text-slate-400 hover:underline">取消全選</button>
+                        </div>
+                        <div class="options-list space-y-1"></div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium">
+                    <span>預排巡檢總筆數</span>
+                    <i class="fa-solid fa-list-check text-slate-400 text-sm"></i>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="kpiTotalChecks" class="text-2xl font-bold text-slate-900">0</span>
+                    <span id="kpiCompletionRate" class="text-xs text-indigo-600 font-bold">進度 0%</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-400 flex items-center justify-between border-t border-slate-100 pt-1.5">
+                    <span>涵蓋機種數</span>
+                    <span id="kpiModelCount" class="font-semibold text-slate-600">0 個</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium">
+                    <span>巡檢合格筆數 (Pass)</span>
+                    <i class="fa-solid fa-circle-check text-emerald-500 text-sm"></i>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="kpiPassCount" class="text-2xl font-bold text-emerald-600">0</span>
+                    <span id="kpiPassRate" class="text-xs text-emerald-700 font-bold">0.0%</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-400 flex items-center justify-between border-t border-slate-100 pt-1.5">
+                    <span>合格率狀態</span>
+                    <span id="kpiPassStatus" class="font-semibold text-emerald-700">未執行</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium">
+                    <span>巡檢異常筆數 (Issue)</span>
+                    <i class="fa-solid fa-triangle-exclamation text-rose-500 text-sm"></i>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="kpiIssueCount" class="text-2xl font-bold text-rose-600">0</span>
+                    <span id="kpiIssueRate" class="text-xs text-rose-700 font-bold">0.0%</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-400 flex items-center justify-between border-t border-slate-100 pt-1.5">
+                    <span>主要異常站點</span>
+                    <span id="kpiTopStation" class="font-semibold text-rose-700 truncate max-w-[110px]">-</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium">
+                    <span>待巡檢預排筆數 (Pending)</span>
+                    <i class="fa-solid fa-hourglass-half text-amber-500 text-sm"></i>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="kpiPendingCount" class="text-2xl font-bold text-amber-600">0</span>
+                    <span id="kpiPendingRate" class="text-xs text-amber-700 font-bold">佔 0.0%</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-400 flex items-center justify-between border-t border-slate-100 pt-1.5">
+                    <span>主要異常內容 (G欄)</span>
+                    <span id="kpiTopIssue" class="font-semibold text-slate-700 truncate max-w-[110px]">-</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Chart 1: Trend Analysis (Daily) (Full Width) -->
+            <div class="col-span-1 lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col relative">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-line text-indigo-600"></i>
+                            <span>一. 巡檢異常筆數與異常率每日趨勢 (Daily Trend Analysis)</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">💡 點擊長條圖可開啟【當日異常內容 (G欄) 柏拉圖分析】視窗</p>
+                    </div>
+                    <button onclick="toggleAxisControl('chart1')" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md font-medium border border-indigo-100 flex items-center space-x-1">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>軸設定</span>
+                    </button>
+                </div>
+
+                <div id="axisPanel-chart1" class="hidden absolute right-5 top-14 z-30 w-80 p-3 bg-white border border-slate-200 shadow-xl rounded-lg text-xs space-y-2">
+                    <div class="font-semibold text-slate-700 border-b border-slate-200 pb-1 flex justify-between items-center">
+                        <span>圖表 1 座標軸極限設定</span>
+                        <button onclick="toggleAxisControl('chart1')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-500">左軸 (次數) 最小</label>
+                            <input type="number" id="c1_yMin" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">左軸 (次數) 最大</label>
+                            <input type="number" id="c1_yMax" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">右軸 (%) 最小</label>
+                            <input type="number" id="c1_y1Min" placeholder="自動 (0)" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">右軸 (%) 最大</label>
+                            <input type="number" id="c1_y1Max" placeholder="自動 (100)" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-1 border-t border-slate-100">
+                        <button onclick="resetAxisSettings('chart1')" class="bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100">重置自動</button>
+                        <button onclick="saveAxisSettings('chart1')" class="bg-indigo-600 text-white px-2.5 py-0.5 rounded hover:bg-indigo-500 font-medium"><i class="fa-solid fa-floppy-disk mr-1"></i>儲存設定</button>
+                    </div>
+                </div>
+
+                <div class="relative w-full h-[280px]">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Feature 2: Weekly Trend Analysis (Full Width) -->
+            <div class="col-span-1 lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col relative">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-line text-blue-600"></i>
+                            <span>二. 巡檢異常筆數與異常率週趨勢 (Weekly Trend Analysis)</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">💡 點擊長條圖可開啟【當週異常內容 (G欄) 柏拉圖分析】視窗</p>
+                    </div>
+                    <button onclick="toggleAxisControl('chartWeekly')" class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-2.5 py-1 rounded-md font-medium border border-blue-100 flex items-center space-x-1">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>軸設定</span>
+                    </button>
+                </div>
+
+                <div id="axisPanel-chartWeekly" class="hidden absolute right-5 top-14 z-30 w-80 p-3 bg-white border border-slate-200 shadow-xl rounded-lg text-xs space-y-2">
+                    <div class="font-semibold text-slate-700 border-b border-slate-200 pb-1 flex justify-between items-center">
+                        <span>週趨勢圖 座標軸極限設定</span>
+                        <button onclick="toggleAxisControl('chartWeekly')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-500">左軸 (次數) 最小</label>
+                            <input type="number" id="cW_yMin" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">左軸 (次數) 最大</label>
+                            <input type="number" id="cW_yMax" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">右軸 (%) 最小</label>
+                            <input type="number" id="cW_y1Min" placeholder="自動 (0)" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">右軸 (%) 最大</label>
+                            <input type="number" id="cW_y1Max" placeholder="自動 (100)" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-1 border-t border-slate-100">
+                        <button onclick="resetAxisSettings('chartWeekly')" class="bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100">重置自動</button>
+                        <button onclick="saveAxisSettings('chartWeekly')" class="bg-blue-600 text-white px-2.5 py-0.5 rounded hover:bg-blue-500 font-medium"><i class="fa-solid fa-floppy-disk mr-1"></i>儲存設定</button>
+                    </div>
+                </div>
+
+                <div class="relative w-full h-[280px]">
+                    <canvas id="weeklyTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Station Comparison (Full Width) -->
+            <div class="col-span-1 lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col relative">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-industry text-emerald-600"></i>
+                            <span>三. 各站點巡檢合格/異常對比 (Station Comparison)</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">完整列出所有 E欄 站點 (支援左右滑動橫軸以清楚檢視所有站點)</p>
+                    </div>
+                    <button onclick="toggleAxisControl('chart3')" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-md font-medium border border-emerald-100 flex items-center space-x-1">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>軸設定</span>
+                    </button>
+                </div>
+
+                <div id="axisPanel-chart3" class="hidden absolute right-5 top-14 z-30 w-80 p-3 bg-white border border-slate-200 shadow-xl rounded-lg text-xs space-y-2">
+                    <div class="font-semibold text-slate-700 border-b border-slate-200 pb-1 flex justify-between items-center">
+                        <span>圖表 2 座標軸極限設定</span>
+                        <button onclick="toggleAxisControl('chart3')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-500">Y軸 (筆數) 最小值</label>
+                            <input type="number" id="c3_yMin" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">Y軸 (筆數) 最大值</label>
+                            <input type="number" id="c3_yMax" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-1 border-t border-slate-100">
+                        <button onclick="resetAxisSettings('chart3')" class="bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100">重置自動</button>
+                        <button onclick="saveAxisSettings('chart3')" class="bg-emerald-600 text-white px-2.5 py-0.5 rounded hover:bg-emerald-500 font-medium"><i class="fa-solid fa-floppy-disk mr-1"></i>儲存設定</button>
+                    </div>
+                </div>
+
+                <div class="w-full overflow-x-auto custom-scrollbar">
+                    <div id="stationChartWrapper" class="relative min-w-full h-[280px]">
+                        <canvas id="stationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 3: Station Defect Pareto (Full Width) -->
+            <div class="col-span-1 lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col relative">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-area text-purple-600"></i>
+                            <span>四. 各站點異常次數柏拉圖 (Station Defect Pareto)</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">💡 點擊長條圖可開啟【該站點之異常巡檢項目統計與發生趨勢圖】視窗</p>
+                    </div>
+                    <button onclick="toggleAxisControl('chart5')" class="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md font-medium border border-purple-100 flex items-center space-x-1">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>軸設定</span>
+                    </button>
+                </div>
+
+                <div id="axisPanel-chart5" class="hidden absolute right-5 top-14 z-30 w-80 p-3 bg-white border border-slate-200 shadow-xl rounded-lg text-xs space-y-2">
+                    <div class="font-semibold text-slate-700 border-b border-slate-200 pb-1 flex justify-between items-center">
+                        <span>圖表 3 座標軸極限設定</span>
+                        <button onclick="toggleAxisControl('chart5')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-500">左軸 (異常次數) 最小</label>
+                            <input type="number" id="c5_yMin" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">左軸 (異常次數) 最大</label>
+                            <input type="number" id="c5_yMax" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">右軸 (%) 最小</label>
+                            <input type="number" id="c5_y1Min" placeholder="自動 (0)" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">右軸 (%) 最大</label>
+                            <input type="number" id="c5_y1Max" placeholder="自動 (100)" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-1 border-t border-slate-100">
+                        <button onclick="resetAxisSettings('chart5')" class="bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100">重置自動</button>
+                        <button onclick="saveAxisSettings('chart5')" class="bg-purple-600 text-white px-2.5 py-0.5 rounded hover:bg-purple-500 font-medium"><i class="fa-solid fa-floppy-disk mr-1"></i>儲存設定</button>
+                    </div>
+                </div>
+
+                <div class="w-full overflow-x-auto custom-scrollbar">
+                    <div id="stationParetoChartWrapper" class="relative min-w-full h-[300px]">
+                        <canvas id="stationParetoChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 4: Defect Content Pareto (Half Width) -->
+            <div class="col-span-1 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col relative">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-column text-amber-600"></i>
+                            <span>五. 巡檢異常內容柏拉圖 (Pareto Analysis)</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">💡 點擊長條圖可開啟該項【異常內容之每日發生趨勢圖】視窗</p>
+                    </div>
+                    <button onclick="toggleAxisControl('chart2')" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md font-medium border border-amber-100 flex items-center space-x-1">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>軸設定</span>
+                    </button>
+                </div>
+
+                <div id="axisPanel-chart2" class="hidden absolute right-5 top-14 z-30 w-80 p-3 bg-white border border-slate-200 shadow-xl rounded-lg text-xs space-y-2">
+                    <div class="font-semibold text-slate-700 border-b border-slate-200 pb-1 flex justify-between items-center">
+                        <span>圖表 4 座標軸極限設定</span>
+                        <button onclick="toggleAxisControl('chart2')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-500">左軸 (次數) 最小</label>
+                            <input type="number" id="c2_yMin" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">左軸 (次數) 最大</label>
+                            <input type="number" id="c2_yMax" placeholder="自動" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">右軸 (%) 最小</label>
+                            <input type="number" id="c2_y1Min" placeholder="自動 (0)" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500">右軸 (%) 最大</label>
+                            <input type="number" id="c2_y1Max" placeholder="自動 (100)" class="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-1 border-t border-slate-100">
+                        <button onclick="resetAxisSettings('chart2')" class="bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100">重置自動</button>
+                        <button onclick="saveAxisSettings('chart2')" class="bg-amber-600 text-white px-2.5 py-0.5 rounded hover:bg-amber-500 font-medium"><i class="fa-solid fa-floppy-disk mr-1"></i>儲存設定</button>
+                    </div>
+                </div>
+
+                <div class="relative w-full h-[280px]">
+                    <canvas id="paretoChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 5: Result Breakdown (Half Width) -->
+            <div class="col-span-1 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col relative">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-pie text-rose-600"></i>
+                            <span>六. 巡檢結果類別佔比 (Result Breakdown)</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">J欄 (合格 / 異常 / 待巡檢 / 未生產 等) 結構與顏色區分</p>
+                    </div>
+                    <span class="text-xs bg-rose-50 text-rose-700 px-2.5 py-1 rounded-md font-medium border border-rose-100">結果佔比</span>
+                </div>
+                <div class="relative w-full h-[280px]">
+                    <canvas id="resultChart"></canvas>
+                </div>
+            </div>
+
+        </section>
+
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-table text-indigo-600 text-lg"></i>
+                    <h3 class="font-bold text-slate-800 text-base">IPQC 巡檢完整數據明細表 (A~N 14欄位)</h3>
+                    <span id="recordCountBadge" class="text-xs bg-slate-200 text-slate-700 font-semibold px-2 py-0.5 rounded-full">0 筆記錄</span>
+                </div>
+
+                <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <div class="relative flex-1 sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="tableSearchInput" placeholder="跨欄位搜尋 (機種/站點/異常/工單)..." class="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+
+                    <button id="exportCsvBtn" class="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">
+                        <i class="fa-solid fa-file-export"></i>
+                        <span>匯出 CSV</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-600 font-semibold uppercase tracking-wider border-b border-slate-200 select-none">
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('ipqcDate')">A. 巡檢日期 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('ipqcTime')">B. 巡檢時間 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('inspector')">C. 巡檢員 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('model')">D. 機種 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('station')">E. 站點 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('item')">F. 巡檢項目 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('content')">G. 巡檢內容 (柏拉圖依據) <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('machineNo')">H. 機台財編 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('opId')">I. 人員工號 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 text-center cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('result')">J. 巡檢結果 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3 min-w-[150px]">K. 異常描述</th>
+                            <th class="py-3 px-3 text-center">L. 異常圖片</th>
+                            <th class="py-3 px-3 cursor-pointer hover:bg-slate-200 transition" onclick="sortTable('workOrder')">M. 工單 <i class="fa-solid fa-sort ml-0.5 opacity-50"></i></th>
+                            <th class="py-3 px-3">N. 備註</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="divide-y divide-slate-100 bg-white">
+                        <tr>
+                            <td colspan="14" class="py-12 text-center text-slate-400">
+                                <i class="fa-solid fa-folder-open text-4xl mb-3 block text-slate-300"></i>
+                                目前無數據，請點擊上方『匯入巡檢 Excel (.xlsx/.csv)』按鈕載入巡檢紀錄檔。
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                <div id="paginationInfo">顯示第 0 至 0 筆，共 0 筆</div>
+                <div class="flex items-center space-x-1" id="paginationControls"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="drillDownModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] transition-all transform scale-100">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                    <div id="modalIconContainer" class="p-2 bg-indigo-600 rounded-lg text-white">
+                        <i class="fa-solid fa-chart-pie"></i>
+                    </div>
+                    <div>
+                        <h3 id="modalTitle" class="text-base font-bold">互動下鑽分析視窗</h3>
+                        <p id="modalSubtitle" class="text-xs text-slate-400">統計維度細部資料拆解</p>
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white text-xl p-1 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content Body -->
+            <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
+                <!-- Summary Stats Badge Bar -->
+                <div id="modalStatsBar" class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs"></div>
+
+                <!-- Modal Main Chart Box -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <h4 id="modalChartHeading" class="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+                        <span>分析圖表</span>
+                        <span class="text-[10px] text-slate-400 font-normal">依當前動態篩選數據即時生成</span>
+                    </h4>
+                    <div class="relative w-full h-[280px]">
+                        <canvas id="modalChartCanvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Modal Detail Table Box -->
+                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div class="px-4 py-2.5 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 flex justify-between items-center">
+                        <span id="modalTableHeading">異常項目統計清單</span>
+                        <span id="modalTableCountBadge" class="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">0 項紀錄</span>
+                    </div>
+                    <div class="overflow-x-auto max-h-[220px] custom-scrollbar">
+                        <table class="w-full text-xs text-left border-collapse">
+                            <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] sticky top-0 border-b border-slate-200">
+                                <tr id="modalTableHeaderRow">
+                                    <th class="py-2 px-3">項目名稱</th>
+                                    <th class="py-2 px-3 text-center">異常次數</th>
+                                    <th class="py-2 px-3 text-center">次數占比</th>
+                                    <th class="py-2 px-3 text-center">累計百分比</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+                <button onclick="closeModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold transition">
+                    關閉視窗
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global Application State
+        let rawData = [];
+        let filteredData = [];
+        let currentSort = { column: 'ipqcDate', direction: 'desc' };
+        let currentPage = 1;
+        const pageSize = 15;
+
+        // Active Chart Instances
+        const chartInstances = {};
+        let modalChartInstance = null;
+
+        // Color Palette Definitions
+        const RESULT_COLORS = {
+            'Pass': { bg: '#10b981', border: '#059669', label: '合格 (Pass)', badge: 'bg-emerald-100 text-emerald-800' },
+            'Issue': { bg: '#f43f5e', border: '#e11d48', label: '異常 (Issue)', badge: 'bg-rose-100 text-rose-800' },
+            'Pending': { bg: '#f59e0b', border: '#d97706', label: '待巡檢 (Pending)', badge: 'bg-amber-100 text-amber-800' },
+            'NotProduced': { bg: '#64748b', border: '#475569', label: '未生產 (Not Produced)', badge: 'bg-slate-200 text-slate-800' },
+            'Other': { bg: '#8b5cf6', border: '#7c3aed', label: '其他', badge: 'bg-purple-100 text-purple-800' }
+        };
+
+        const AXIS_CONFIG_KEY_PREFIX = 'ipqc_chart_axis_config_';
+
+        const filterDimensions = [
+            { id: 'result', field: 'result', label: '巡檢結果' },
+            { id: 'model', field: 'model', label: '機種' },
+            { id: 'station', field: 'station', label: '站點' },
+            { id: 'item', field: 'item', label: '巡檢項目' },
+            { id: 'inspector', field: 'inspector', label: '巡檢員' },
+            { id: 'machineNo', field: 'machineNo', label: '機台財編' },
+            { id: 'opId', field: 'opId', label: '人員工號' },
+            { id: 'workOrder', field: 'workOrder', label: '工單' }
+        ];
+
+        const customDataLabelsPlugin = {
+            id: 'customDataLabelsPlugin',
+            afterDatasetsDraw(chart) {
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return;
+
+                ctx.save();
+
+                // 1. Draw Bar Data Labels (Counts on top of each bar)
+                chart.data.datasets.forEach((dataset, datasetIndex) => {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    if (meta.hidden) return;
+
+                    const isLine = dataset.type === 'line' || meta.type === 'line';
+                    const isBar = dataset.type === 'bar' || meta.type === 'bar' || (!dataset.type && chart.config.type === 'bar' && !isLine);
+
+                    if (isBar) {
+                        ctx.font = 'bold 10px Inter, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+
+                        meta.data.forEach((element, index) => {
+                            const val = dataset.data[index];
+                            if (val === undefined || val === null) return;
+
+                            ctx.fillStyle = '#334155';
+                            const x = element.x;
+                            const y = element.y - 3;
+
+                            if (y >= chartArea.top - 10) {
+                                ctx.fillText(String(val), x, y);
+                            }
+                        });
+                    }
+                });
+
+                // 2. Draw Line Data Labels (Distinguish between Counts and Percentages based on dataset.isPercentage)
+                chart.data.datasets.forEach((dataset, datasetIndex) => {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    if (meta.hidden) return;
+
+                    const isLine = dataset.type === 'line' || meta.type === 'line';
+                    if (!isLine) return;
+
+                    ctx.font = 'bold 10px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillStyle = dataset.borderColor || '#4f46e5';
+
+                    let barMeta = null;
+                    chart.data.datasets.forEach((ds, idx) => {
+                        const m = chart.getDatasetMeta(idx);
+                        if ((ds.type === 'bar' || m.type === 'bar') && !m.hidden) {
+                            barMeta = m;
+                        }
+                    });
+
+                    meta.data.forEach((element, index) => {
+                        const val = dataset.data[index];
+                        if (val === undefined || val === null) return;
+
+                        const isPercent = dataset.isPercentage !== undefined 
+                            ? dataset.isPercentage 
+                            : (dataset.yAxisID === 'y1' || (dataset.label && dataset.label.includes('%')));
+
+                        const text = isPercent ? `${val}%` : String(val);
+                        const x = element.x;
+
+                        let y;
+                        if (barMeta && barMeta.data[index]) {
+                            const barY = barMeta.data[index].y;
+                            y = Math.min(barY - 16, element.y - 8);
+                        } else {
+                            y = element.y - 8;
+                        }
+
+                        if (y < chartArea.top + 10) {
+                            y = chartArea.top + 12;
+                        }
+
+                        ctx.fillText(text, x, y);
+                    });
+                });
+
+                // 3. Draw Doughnut / Pie Data Labels (Count + Percentage directly on slice)
+                if (chart.config.type === 'doughnut' || chart.config.type === 'pie') {
+                    chart.data.datasets.forEach((dataset, datasetIndex) => {
+                        const meta = chart.getDatasetMeta(datasetIndex);
+                        if (meta.hidden) return;
+
+                        const total = dataset.data.reduce((acc, v) => acc + (v || 0), 0);
+                        if (total === 0) return;
+
+                        meta.data.forEach((element, index) => {
+                            const val = dataset.data[index];
+                            if (val === undefined || val === null || val === 0) return;
+
+                            const pct = ((val / total) * 100).toFixed(1);
+                            const { x, y, startAngle, endAngle, innerRadius, outerRadius } = element;
+                            const midAngle = startAngle + (endAngle - startAngle) / 2;
+
+                            if (endAngle - startAngle < 0.18) return;
+
+                            const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+                            const labelX = x + Math.cos(midAngle) * radius;
+                            const labelY = y + Math.sin(midAngle) * radius;
+
+                            ctx.font = 'bold 11px Inter, sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+
+                            const labelText = `${val} (${pct}%)`;
+                            ctx.lineWidth = 3;
+                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+                            ctx.strokeText(labelText, labelX, labelY);
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillText(labelText, labelX, labelY);
+                        });
+                    });
+                }
+
+                ctx.restore();
+            }
+        };
+
+        Chart.register(customDataLabelsPlugin);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initDropdownEvents();
+            setupFilterListeners();
+            setupFileUpload();
+            setupRecentDaysDropdown();
+            setupRecentWeeksDropdown();
+            setupDateModeToggle();
+
+            // Initialize Dashboard View
+            populateFilterDropdowns();
+            applyFilters();
+
+            // Clear Data Button
+            document.getElementById('clearDataBtn').addEventListener('click', () => {
+                if (rawData.length === 0) {
+                    showToast('目前原本就沒有載入任何數據');
+                    return;
+                }
+                rawData = [];
+                filteredData = [];
+                document.getElementById('excelFileInput').value = '';
+                resetAllFiltersUI();
+                populateFilterDropdowns();
+                applyFilters();
+                showToast('所有巡檢數據已成功清空');
+            });
+
+            // Date Preset Buttons
+            document.getElementById('singleDateBtn').addEventListener('click', () => {
+                if (rawData.length === 0) return;
+                const dates = rawData.map(d => d.ipqcDate).filter(d => d && d !== '未標示').sort().reverse();
+                if (dates.length > 0) {
+                    const latestDate = dates[0];
+                    const mode = document.querySelector('input[name="dateMode"]:checked').value;
+                    if (mode === 'date') {
+                        document.getElementById('startDateFilter').value = latestDate;
+                        document.getElementById('endDateFilter').value = latestDate;
+                    } else {
+                        const weekStr = getISOWeekStr(new Date(latestDate));
+                        document.getElementById('startWeekFilter').value = weekStr;
+                        document.getElementById('endWeekFilter').value = weekStr;
+                    }
+                    document.getElementById('recentDaysSelect').value = '';
+                    document.getElementById('recentWeeksSelect').value = '';
+                    applyFilters();
+                }
+            });
+
+            document.getElementById('resetDateRangeBtn').addEventListener('click', () => {
+                document.getElementById('startDateFilter').value = '';
+                document.getElementById('endDateFilter').value = '';
+                document.getElementById('startWeekFilter').value = '';
+                document.getElementById('endWeekFilter').value = '';
+                document.getElementById('recentDaysSelect').value = '';
+                document.getElementById('recentWeeksSelect').value = '';
+                applyFilters();
+            });
+
+            document.getElementById('resetTimeRangeBtn').addEventListener('click', () => {
+                document.getElementById('startTimeFilter').value = '00:00';
+                document.getElementById('endTimeFilter').value = '23:59';
+                applyFilters();
+            });
+
+            document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+                resetAllFiltersUI();
+                applyFilters();
+            });
+
+            // Search input for Table
+            document.getElementById('tableSearchInput').addEventListener('input', () => {
+                currentPage = 1;
+                renderTable();
+            });
+
+            document.getElementById('exportCsvBtn').addEventListener('click', exportToCSV);
+        });
+
+        // Helper: Get ISO Week string (YYYY-Www)
+        function getISOWeekStr(date) {
+            const target = new Date(date.valueOf());
+            const dayNr = (date.getDay() + 6) % 7;
+            target.setDate(target.getDate() - dayNr + 3);
+            const firstThursday = target.valueOf();
+            target.setMonth(0, 1);
+            if (target.getDay() !== 4) {
+                target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+            }
+            const weekNum = 1 + Math.round((firstThursday - target.valueOf()) / 604800000);
+            const year = target.getFullYear();
+            return `${year}-W${String(weekNum).padStart(2, '0')}`;
+        }
+
+        // Helper: Get Monday Date object of an ISO Week string (YYYY-Www)
+        function getDateOfISOWeek(wStr) {
+            const parts = wStr.split('-W');
+            if (parts.length !== 2) return null;
+            const y = parseInt(parts[0], 10);
+            const w = parseInt(parts[1], 10);
+            const simple = new Date(y, 0, 1 + (w - 1) * 7);
+            const dow = simple.getDay();
+            const ISOweekStart = simple;
+            if (dow <= 4)
+                ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+            else
+                ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+            return ISOweekStart;
+        }
+
+        function setupDateModeToggle() {
+            const dateRadios = document.querySelectorAll('input[name="dateMode"]');
+            dateRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const mode = e.target.value;
+                    const startDateInput = document.getElementById('startDateFilter');
+                    const endDateInput = document.getElementById('endDateFilter');
+                    const startWeekInput = document.getElementById('startWeekFilter');
+                    const endWeekInput = document.getElementById('endWeekFilter');
+                    const startLabel = document.getElementById('startDateLabel');
+                    const endLabel = document.getElementById('endDateLabel');
+
+                    if (mode === 'date') {
+                        startDateInput.classList.remove('hidden');
+                        endDateInput.classList.remove('hidden');
+                        startWeekInput.classList.add('hidden');
+                        endWeekInput.classList.add('hidden');
+                        startLabel.textContent = '起始日期';
+                        endLabel.textContent = '結束日期';
+                    } else {
+                        startDateInput.classList.add('hidden');
+                        endDateInput.classList.add('hidden');
+                        startWeekInput.classList.remove('hidden');
+                        endWeekInput.classList.remove('hidden');
+                        startLabel.textContent = '起始周別';
+                        endLabel.textContent = '結束周別';
+                    }
+                    applyFilters();
+                });
+            });
+        }
+
+        function setupRecentDaysDropdown() {
+            const recentSelect = document.getElementById('recentDaysSelect');
+            if (!recentSelect) return;
+
+            for (let i = 2; i <= 31; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `近 ${i} 天`;
+                recentSelect.appendChild(opt);
+            }
+
+            recentSelect.addEventListener('change', (e) => {
+                const days = parseInt(e.target.value);
+                if (!days || isNaN(days) || rawData.length === 0) return;
+
+                // Switch to date mode
+                const dateRadio = document.querySelector('input[name="dateMode"][value="date"]');
+                if (dateRadio) {
+                    dateRadio.checked = true;
+                    dateRadio.dispatchEvent(new Event('change'));
+                }
+
+                const dates = rawData.map(d => d.ipqcDate).filter(d => d && d !== '未標示').sort();
+                if (dates.length === 0) return;
+
+                const maxDateStr = dates[dates.length - 1]; // latest available date
+                const maxDate = new Date(maxDateStr);
+                const startDate = new Date(maxDate);
+                startDate.setDate(maxDate.getDate() - (days - 1));
+
+                const formatYMD = (d) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                };
+
+                document.getElementById('startDateFilter').value = formatYMD(startDate);
+                document.getElementById('endDateFilter').value = formatYMD(maxDate);
+                document.getElementById('recentWeeksSelect').value = '';
+                applyFilters();
+            });
+        }
+
+        // Feature 1: Recent Weeks Dropdown (1 to 10 weeks)
+        function setupRecentWeeksDropdown() {
+            const recentWeeksSelect = document.getElementById('recentWeeksSelect');
+            if (!recentWeeksSelect) return;
+
+            for (let i = 1; i <= 10; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `近 ${i} 周`;
+                recentWeeksSelect.appendChild(opt);
+            }
+
+            recentWeeksSelect.addEventListener('change', (e) => {
+                const weeks = parseInt(e.target.value);
+                if (!weeks || isNaN(weeks) || rawData.length === 0) return;
+
+                // Switch to week mode
+                const weekRadio = document.querySelector('input[name="dateMode"][value="week"]');
+                if (weekRadio) {
+                    weekRadio.checked = true;
+                    weekRadio.dispatchEvent(new Event('change'));
+                }
+
+                const dates = rawData.map(d => d.ipqcDate).filter(d => d && d !== '未標示').sort();
+                if (dates.length === 0) return;
+
+                const maxDateStr = dates[dates.length - 1];
+                const maxDate = new Date(maxDateStr);
+                
+                const maxWeekStr = getISOWeekStr(maxDate);
+                
+                // Calculate starting week date by subtracting (weeks - 1) * 7 days from max date
+                const startWeekDate = new Date(maxDate);
+                startWeekDate.setDate(maxDate.getDate() - ((weeks - 1) * 7));
+                const startWeekStr = getISOWeekStr(startWeekDate);
+
+                document.getElementById('startWeekFilter').value = startWeekStr;
+                document.getElementById('endWeekFilter').value = maxWeekStr;
+                document.getElementById('recentDaysSelect').value = '';
+                applyFilters();
+            });
+        }
+
+        function getSavedAxisSettings(chartId) {
+            try {
+                const saved = localStorage.getItem(AXIS_CONFIG_KEY_PREFIX + chartId);
+                return saved ? JSON.parse(saved) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function toggleAxisControl(chartId) {
+            const panel = document.getElementById(`axisPanel-${chartId}`);
+            if (panel) {
+                const isHidden = panel.classList.contains('hidden');
+                document.querySelectorAll('[id^="axisPanel-"]').forEach(p => p.classList.add('hidden'));
+
+                if (isHidden) {
+                    panel.classList.remove('hidden');
+                    const cfg = getSavedAxisSettings(chartId);
+                    const prefix = chartId === 'chart1' ? 'c1' : chartId === 'chartWeekly' ? 'cW' : chartId === 'chart2' ? 'c2' : chartId === 'chart3' ? 'c3' : 'c5';
+                    if (document.getElementById(`${prefix}_yMin`)) {
+                        document.getElementById(`${prefix}_yMin`).value = cfg.yMin !== undefined ? cfg.yMin : '';
+                        document.getElementById(`${prefix}_yMax`).value = cfg.yMax !== undefined ? cfg.yMax : '';
+                        if (document.getElementById(`${prefix}_y1Min`)) {
+                            document.getElementById(`${prefix}_y1Min`).value = cfg.y1Min !== undefined ? cfg.y1Min : '';
+                            document.getElementById(`${prefix}_y1Max`).value = cfg.y1Max !== undefined ? cfg.y1Max : '';
+                        }
+                    }
+                }
+            }
+        }
+
+        function saveAxisSettings(chartId) {
+            const prefix = chartId === 'chart1' ? 'c1' : chartId === 'chartWeekly' ? 'cW' : chartId === 'chart2' ? 'c2' : chartId === 'chart3' ? 'c3' : 'c5';
+            const yMin = document.getElementById(`${prefix}_yMin`).value !== '' ? parseFloat(document.getElementById(`${prefix}_yMin`).value) : undefined;
+            const yMax = document.getElementById(`${prefix}_yMax`).value !== '' ? parseFloat(document.getElementById(`${prefix}_yMax`).value) : undefined;
+            
+            let y1Min, y1Max;
+            if (document.getElementById(`${prefix}_y1Min`)) {
+                y1Min = document.getElementById(`${prefix}_y1Min`).value !== '' ? parseFloat(document.getElementById(`${prefix}_y1Min`).value) : undefined;
+                y1Max = document.getElementById(`${prefix}_y1Max`).value !== '' ? parseFloat(document.getElementById(`${prefix}_y1Max`).value) : undefined;
+            }
+
+            const config = { yMin, yMax, y1Min, y1Max };
+            localStorage.setItem(AXIS_CONFIG_KEY_PREFIX + chartId, JSON.stringify(config));
+            
+            toggleAxisControl(chartId);
+            updateDashboardCharts();
+            showToast('座標軸極限設定已儲存');
+        }
+
+        function resetAxisSettings(chartId) {
+            localStorage.removeItem(AXIS_CONFIG_KEY_PREFIX + chartId);
+            const prefix = chartId === 'chart1' ? 'c1' : chartId === 'chartWeekly' ? 'cW' : chartId === 'chart2' ? 'c2' : chartId === 'chart3' ? 'c3' : 'c5';
+            if (document.getElementById(`${prefix}_yMin`)) document.getElementById(`${prefix}_yMin`).value = '';
+            if (document.getElementById(`${prefix}_yMax`)) document.getElementById(`${prefix}_yMax`).value = '';
+            if (document.getElementById(`${prefix}_y1Min`)) document.getElementById(`${prefix}_y1Min`).value = '';
+            if (document.getElementById(`${prefix}_y1Max`)) document.getElementById(`${prefix}_y1Max`).value = '';
+            
+            toggleAxisControl(chartId);
+            updateDashboardCharts();
+            showToast('已重置為自動座標軸');
+        }
+
+        function setupFilterListeners() {
+            ['startDateFilter', 'endDateFilter', 'startWeekFilter', 'endWeekFilter', 'startTimeFilter', 'endTimeFilter'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', () => {
+                    if (id.includes('Date')) document.getElementById('recentDaysSelect').value = '';
+                    if (id.includes('Week')) document.getElementById('recentWeeksSelect').value = '';
+                    applyFilters();
+                });
+            });
+        }
+
+        function setupFileUpload() {
+            const fileInput = document.getElementById('excelFileInput');
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const data = new Uint8Array(evt.target.result);
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
+
+                        if (jsonRows.length <= 1) {
+                            showToast('匯入的檔案無有效數據記錄！');
+                            return;
+                        }
+
+                        rawData = parseExcelRows(jsonRows);
+                        resetAllFiltersUI();
+                        populateFilterDropdowns();
+                        applyFilters();
+                        showToast(`成功匯入 ${rawData.length} 筆巡檢紀錄！`);
+
+                    } catch (err) {
+                        console.error('Excel Parsing Error:', err);
+                        showToast('解析 Excel 檔案失敗，請確保格式正確 (.xlsx, .csv)！');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function parseExcelRows(rows) {
+            const parsed = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                if (!r || r.length === 0) continue;
+
+                const dateVal = formatStandardDate(r[0]);
+                const timeVal = formatStandardTime(r[1]);
+                const resultVal = standardizeResult(r[9]);
+
+                if (!dateVal && !r[3]) continue;
+
+                parsed.push({
+                    id: i,
+                    ipqcDate: dateVal || '未標示',
+                    ipqcTime: timeVal || '00:00',
+                    inspector: trimVal(r[2]) || '未填寫',
+                    model: trimVal(r[3]) || '未指定',
+                    station: trimVal(r[4]) || '未指定',
+                    item: trimVal(r[5]) || '未指定',
+                    content: trimVal(r[6]) || '未指定',
+                    machineNo: trimVal(r[7]) || '-',
+                    opId: trimVal(r[8]) || '-',
+                    result: resultVal,
+                    defectDesc: trimVal(r[10]) || '-',
+                    defectImg: trimVal(r[11]) || '',
+                    workOrder: trimVal(r[12]) || '-',
+                    remarks: trimVal(r[13]) || '-'
+                });
+            }
+            return parsed;
+        }
+
+        function trimVal(v) {
+            return v !== undefined && v !== null ? String(v).trim() : '';
+        }
+
+        function standardizeResult(resStr) {
+            if (!resStr) return '待巡檢';
+            const s = String(resStr).trim().toLowerCase();
+            if (s.includes('pass') || s.includes('合格') || s.includes('ok') || s.includes('允收')) return '合格';
+            if (s.includes('issue') || s.includes('ng') || s.includes('異常') || s.includes('不合格') || s.includes('退件')) return '異常';
+            if (s.includes('未生產') || s.includes('未開線') || s.includes('停線') || s.includes('no prod')) return '未生產';
+            if (s.includes('pending') || s.includes('待巡檢') || s.includes('預排') || s.includes('未巡檢')) return '待巡檢';
+            return String(resStr).trim();
+        }
+
+        function formatStandardDate(d) {
+            if (!d) return '';
+            if (typeof d === 'string') {
+                const match = d.match(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/);
+                if (match) {
+                    const parts = match[0].split(/[-/.]/);
+                    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                }
+                return d.trim();
+            }
+            return String(d).trim();
+        }
+
+        function formatStandardTime(t) {
+            if (!t) return '00:00';
+            const s = String(t).trim();
+            const match = s.match(/\d{1,2}:\d{2}/);
+            if (match) {
+                const parts = match[0].split(':');
+                return `${parts[0].padStart(2, '0')}:${parts[1]}`;
+            }
+            return '00:00';
+        }
+
+        function initDropdownEvents() {
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.multi-select-container')) {
+                    document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+                }
+            });
+
+            filterDimensions.forEach(dim => {
+                const container = document.getElementById(`container-${dim.id}`);
+                if (!container) return;
+
+                const toggleBtn = container.querySelector('.dropdown-toggle');
+                const menu = container.querySelector('.dropdown-menu');
+                const selectAllBtn = container.querySelector('.select-all');
+                const deselectAllBtn = container.querySelector('.deselect-all');
+
+                toggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.dropdown-menu').forEach(m => {
+                        if (m !== menu) m.classList.remove('show');
+                    });
+                    menu.classList.toggle('show');
+                });
+
+                selectAllBtn.addEventListener('click', () => {
+                    container.querySelectorAll('.option-checkbox').forEach(cb => cb.checked = true);
+                    updateDropdownLabel(dim.id);
+                    applyFilters();
+                });
+
+                deselectAllBtn.addEventListener('click', () => {
+                    container.querySelectorAll('.option-checkbox').forEach(cb => cb.checked = false);
+                    updateDropdownLabel(dim.id);
+                    applyFilters();
+                });
+            });
+        }
+
+        function populateFilterDropdowns() {
+            filterDimensions.forEach(dim => {
+                const container = document.getElementById(`container-${dim.id}`);
+                if (!container) return;
+                const optionsList = container.querySelector('.options-list');
+                optionsList.innerHTML = '';
+
+                const uniqueVals = Array.from(new Set(rawData.map(r => r[dim.field]))).filter(Boolean).sort();
+
+                if (uniqueVals.length === 0) {
+                    optionsList.innerHTML = '<div class="text-[11px] text-slate-400 p-2 text-center">尚無選項</div>';
+                } else {
+                    uniqueVals.forEach(val => {
+                        const label = document.createElement('label');
+                        label.className = 'flex items-center space-x-2 py-1 px-1.5 hover:bg-slate-100 rounded cursor-pointer text-xs';
+                        label.innerHTML = `
+                            <input type="checkbox" value="${val}" checked class="option-checkbox rounded text-indigo-600 focus:ring-indigo-500">
+                            <span class="truncate">${val}</span>
+                        `;
+                        const cb = label.querySelector('input');
+                        cb.addEventListener('change', () => {
+                            updateDropdownLabel(dim.id);
+                            applyFilters();
+                        });
+                        optionsList.appendChild(label);
+                    });
+                }
+
+                updateDropdownLabel(dim.id);
+            });
+        }
+
+        function updateDropdownLabel(dimId) {
+            const container = document.getElementById(`container-${dimId}`);
+            if (!container) return;
+            const checkboxes = container.querySelectorAll('.option-checkbox');
+            const checked = container.querySelectorAll('.option-checkbox:checked');
+            const labelSpan = container.querySelector('.selected-text');
+
+            if (checkboxes.length === 0) {
+                labelSpan.textContent = '無數據';
+            } else if (checked.length === checkboxes.length) {
+                labelSpan.textContent = '全部選擇';
+            } else if (checked.length === 0) {
+                labelSpan.textContent = '未選擇 (0)';
+            } else {
+                labelSpan.textContent = `已選 ${checked.length} 項`;
+            }
+        }
+
+        function resetAllFiltersUI() {
+            document.getElementById('startDateFilter').value = '';
+            document.getElementById('endDateFilter').value = '';
+            document.getElementById('startWeekFilter').value = '';
+            document.getElementById('endWeekFilter').value = '';
+            document.getElementById('startTimeFilter').value = '00:00';
+            document.getElementById('endTimeFilter').value = '23:59';
+            const recentSelect = document.getElementById('recentDaysSelect');
+            if (recentSelect) recentSelect.value = '';
+            const recentWeeksSelect = document.getElementById('recentWeeksSelect');
+            if (recentWeeksSelect) recentWeeksSelect.value = '';
+
+            filterDimensions.forEach(dim => {
+                const container = document.getElementById(`container-${dim.id}`);
+                if (!container) return;
+                container.querySelectorAll('.option-checkbox').forEach(cb => cb.checked = true);
+                updateDropdownLabel(dim.id);
+            });
+        }
+
+        function applyFilters() {
+            const dateMode = document.querySelector('input[name="dateMode"]:checked').value;
+            const startDate = document.getElementById('startDateFilter').value;
+            const endDate = document.getElementById('endDateFilter').value;
+            const startWeek = document.getElementById('startWeekFilter').value;
+            const endWeek = document.getElementById('endWeekFilter').value;
+            const startTime = document.getElementById('startTimeFilter').value || '00:00';
+            const endTime = document.getElementById('endTimeFilter').value || '23:59';
+
+            const selectedFilters = {};
+            filterDimensions.forEach(dim => {
+                const container = document.getElementById(`container-${dim.id}`);
+                if (!container) return;
+                const checked = Array.from(container.querySelectorAll('.option-checkbox:checked')).map(cb => cb.value);
+                selectedFilters[dim.field] = checked;
+            });
+
+            filteredData = rawData.filter(row => {
+                if (dateMode === 'date') {
+                    if (startDate && row.ipqcDate < startDate) return false;
+                    if (endDate && row.ipqcDate > endDate) return false;
+                } else {
+                    if (row.ipqcDate && row.ipqcDate !== '未標示') {
+                        const rowWeek = getISOWeekStr(new Date(row.ipqcDate));
+                        if (startWeek && rowWeek < startWeek) return false;
+                        if (endWeek && rowWeek > endWeek) return false;
+                    }
+                }
+
+                if (startTime && row.ipqcTime < startTime) return false;
+                if (endTime && row.ipqcTime > endTime) return false;
+
+                for (let field in selectedFilters) {
+                    if (selectedFilters[field].length > 0) {
+                        if (!selectedFilters[field].includes(row[field])) return false;
+                    } else {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            currentPage = 1;
+            updateDashboardUI();
+        }
+
+        function updateDashboardUI() {
+            updateKPIs();
+            updateDashboardCharts();
+            renderTable();
+        }
+
+        function updateKPIs() {
+            const total = filteredData.length;
+            const passRows = filteredData.filter(d => d.result === '合格');
+            const issueRows = filteredData.filter(d => d.result === '異常');
+            const pendingRows = filteredData.filter(d => d.result === '待巡檢');
+
+            const passCount = passRows.length;
+            const issueCount = issueRows.length;
+            const pendingCount = pendingRows.length;
+
+            const inspectedCount = passCount + issueCount;
+            const passRate = inspectedCount > 0 ? ((passCount / inspectedCount) * 100).toFixed(1) : '0.0';
+            const issueRate = inspectedCount > 0 ? ((issueCount / inspectedCount) * 100).toFixed(1) : '0.0';
+            const pendingRate = total > 0 ? ((pendingCount / total) * 100).toFixed(1) : '0.0';
+            const completionRate = total > 0 ? (((total - pendingCount) / total) * 100).toFixed(0) : '0';
+
+            const models = new Set(filteredData.map(d => d.model)).size;
+
+            document.getElementById('kpiTotalChecks').textContent = total.toLocaleString();
+            document.getElementById('kpiCompletionRate').textContent = `進度 ${completionRate}%`;
+            document.getElementById('kpiModelCount').textContent = `${models} 個`;
+
+            document.getElementById('kpiPassCount').textContent = passCount.toLocaleString();
+            document.getElementById('kpiPassRate').textContent = `${passRate}%`;
+            document.getElementById('kpiPassStatus').textContent = inspectedCount > 0 ? (parseFloat(passRate) >= 95 ? '優良 🟢' : '需要關注 🟡') : '未執行';
+
+            document.getElementById('kpiIssueCount').textContent = issueCount.toLocaleString();
+            document.getElementById('kpiIssueRate').textContent = `${issueRate}%`;
+
+            const stationCounts = {};
+            issueRows.forEach(r => {
+                stationCounts[r.station] = (stationCounts[r.station] || 0) + 1;
+            });
+            const topStation = Object.keys(stationCounts).sort((a, b) => stationCounts[b] - stationCounts[a])[0] || '-';
+            document.getElementById('kpiTopStation').textContent = topStation;
+
+            document.getElementById('kpiPendingCount').textContent = pendingCount.toLocaleString();
+            document.getElementById('kpiPendingRate').textContent = `佔 ${pendingRate}%`;
+
+            const contentCounts = {};
+            issueRows.forEach(r => {
+                if (r.content && r.content !== '-') {
+                    contentCounts[r.content] = (contentCounts[r.content] || 0) + 1;
+                }
+            });
+            const topContent = Object.keys(contentCounts).sort((a, b) => contentCounts[b] - contentCounts[a])[0] || '-';
+            document.getElementById('kpiTopIssue').textContent = topContent;
+        }
+
+        function updateDashboardCharts() {
+            renderChart1();
+            renderChartWeekly();
+            renderChart2();
+            renderChart3();
+            renderChart4();
+            renderChart5();
+        }
+
+        function renderChart1() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (chartInstances.chart1) chartInstances.chart1.destroy();
+
+            const datesMap = {};
+
+            filteredData.forEach(r => {
+                if (!r.ipqcDate || r.ipqcDate === '未標示') return;
+                if (!datesMap[r.ipqcDate]) {
+                    datesMap[r.ipqcDate] = { total: 0, pass: 0, issue: 0 };
+                }
+                datesMap[r.ipqcDate].total++;
+                if (r.result === '合格') datesMap[r.ipqcDate].pass++;
+                if (r.result === '異常') datesMap[r.ipqcDate].issue++;
+            });
+
+            let startDate = document.getElementById('startDateFilter').value;
+            let endDate = document.getElementById('endDateFilter').value;
+
+            const existingDates = Object.keys(datesMap).sort();
+
+            if (!startDate && existingDates.length > 0) {
+                startDate = existingDates[0];
+            }
+            if (!endDate && existingDates.length > 0) {
+                endDate = existingDates[existingDates.length - 1];
+            }
+
+            if (startDate && endDate && startDate <= endDate) {
+                let curr = new Date(startDate);
+                const end = new Date(endDate);
+                let safetyCounter = 0;
+                while (curr <= end && safetyCounter < 366) {
+                    const dateStr = curr.toISOString().split('T')[0];
+                    if (!datesMap[dateStr]) {
+                        datesMap[dateStr] = { total: 0, pass: 0, issue: 0 };
+                    }
+                    curr.setDate(curr.getDate() + 1);
+                    safetyCounter++;
+                }
+            }
+
+            const labels = Object.keys(datesMap).sort();
+            const issueCounts = labels.map(d => datesMap[d].issue);
+            const issueRates = labels.map(d => {
+                const insp = datesMap[d].pass + datesMap[d].issue;
+                return insp > 0 ? parseFloat(((datesMap[d].issue / insp) * 100).toFixed(1)) : 0;
+            });
+
+            const axisCfg = getSavedAxisSettings('chart1');
+
+            chartInstances.chart1 = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '異常筆數 (次)',
+                            data: issueCounts,
+                            backgroundColor: 'rgba(244, 63, 94, 0.75)',
+                            borderColor: '#e11d48',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '異常率 (%)',
+                            data: issueRates,
+                            type: 'line',
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            borderWidth: 2,
+                            pointBackgroundColor: '#4f46e5',
+                            tension: 0.2,
+                            yAxisID: 'y1',
+                            isPercentage: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const index = activeElements[0].index;
+                            const clickedDate = labels[index];
+                            openDailyDefectParetoModal(clickedDate);
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            title: { display: true, text: '異常筆數 (次)', font: { size: 10 } },
+                            min: axisCfg.yMin,
+                            max: axisCfg.yMax,
+                            grid: { color: '#f1f5f9' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            title: { display: true, text: '異常率 (%)', font: { size: 10 } },
+                            min: axisCfg.y1Min !== undefined ? axisCfg.y1Min : 0,
+                            max: axisCfg.y1Max !== undefined ? axisCfg.y1Max : 100,
+                            grid: { drawOnChartArea: false }
+                        },
+                        x: {
+                            ticks: { font: { size: 10 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                footer: () => '💡 點擊此柱狀圖可查看該日 G欄 巡檢內容柏拉圖'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChartWeekly() {
+            const ctx = document.getElementById('weeklyTrendChart').getContext('2d');
+            if (chartInstances.chartWeekly) chartInstances.chartWeekly.destroy();
+
+            const weeksMap = {};
+
+            filteredData.forEach(r => {
+                if (!r.ipqcDate || r.ipqcDate === '未標示') return;
+                const weekStr = getISOWeekStr(new Date(r.ipqcDate));
+                if (!weeksMap[weekStr]) {
+                    weeksMap[weekStr] = { total: 0, pass: 0, issue: 0 };
+                }
+                weeksMap[weekStr].total++;
+                if (r.result === '合格') weeksMap[weekStr].pass++;
+                if (r.result === '異常') weeksMap[weekStr].issue++;
+            });
+
+            let startWeek = document.getElementById('startWeekFilter').value;
+            let endWeek = document.getElementById('endWeekFilter').value;
+
+            const existingWeeks = Object.keys(weeksMap).sort();
+
+            if (!startWeek && existingWeeks.length > 0) {
+                startWeek = existingWeeks[0];
+            }
+            if (!endWeek && existingWeeks.length > 0) {
+                endWeek = existingWeeks[existingWeeks.length - 1];
+            }
+
+            if (startWeek && endWeek && startWeek <= endWeek) {
+                let currDate = getDateOfISOWeek(startWeek);
+                const endDate = getDateOfISOWeek(endWeek);
+                if (currDate && endDate) {
+                    let safetyCounter = 0;
+                    while (currDate <= endDate && safetyCounter < 104) {
+                        const wStr = getISOWeekStr(currDate);
+                        if (!weeksMap[wStr]) {
+                            weeksMap[wStr] = { total: 0, pass: 0, issue: 0 };
+                        }
+                        currDate.setDate(currDate.getDate() + 7);
+                        safetyCounter++;
+                    }
+                }
+            }
+
+            const labels = Object.keys(weeksMap).sort();
+            const issueCounts = labels.map(w => weeksMap[w].issue);
+            const issueRates = labels.map(w => {
+                const insp = weeksMap[w].pass + weeksMap[w].issue;
+                return insp > 0 ? parseFloat(((weeksMap[w].issue / insp) * 100).toFixed(1)) : 0;
+            });
+
+            const axisCfg = getSavedAxisSettings('chartWeekly');
+
+            chartInstances.chartWeekly = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '週異常筆數 (次)',
+                            data: issueCounts,
+                            backgroundColor: 'rgba(59, 130, 246, 0.75)',
+                            borderColor: '#2563eb',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '週異常率 (%)',
+                            data: issueRates,
+                            type: 'line',
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            borderWidth: 2,
+                            pointBackgroundColor: '#d97706',
+                            tension: 0.2,
+                            yAxisID: 'y1',
+                            isPercentage: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const index = activeElements[0].index;
+                            const clickedWeek = labels[index];
+                            openWeeklyDefectParetoModal(clickedWeek);
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            title: { display: true, text: '週異常筆數 (次)', font: { size: 10 } },
+                            min: axisCfg.yMin,
+                            max: axisCfg.yMax,
+                            grid: { color: '#f1f5f9' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            title: { display: true, text: '週異常率 (%)', font: { size: 10 } },
+                            min: axisCfg.y1Min !== undefined ? axisCfg.y1Min : 0,
+                            max: axisCfg.y1Max !== undefined ? axisCfg.y1Max : 100,
+                            grid: { drawOnChartArea: false }
+                        },
+                        x: {
+                            ticks: { font: { size: 10 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                footer: () => '💡 點擊此柱狀圖可查看該週 G欄 巡檢內容柏拉圖'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChart2() {
+            const ctx = document.getElementById('stationChart').getContext('2d');
+            if (chartInstances.chart3) chartInstances.chart3.destroy();
+
+            const allStations = Array.from(new Set(filteredData.map(r => r.station))).filter(Boolean).sort();
+
+            const stationMap = {};
+            allStations.forEach(st => {
+                stationMap[st] = { pass: 0, issue: 0, pending: 0, notProduced: 0 };
+            });
+
+            filteredData.forEach(r => {
+                if (!r.station || !stationMap[r.station]) return;
+                if (r.result === '合格') stationMap[r.station].pass++;
+                else if (r.result === '異常') stationMap[r.station].issue++;
+                else if (r.result === '待巡檢') stationMap[r.station].pending++;
+                else if (r.result === '未生產') stationMap[r.station].notProduced++;
+            });
+
+            const labels = allStations;
+            const passData = labels.map(st => stationMap[st].pass);
+            const issueData = labels.map(st => stationMap[st].issue);
+            const pendingData = labels.map(st => stationMap[st].pending);
+            const notProducedData = labels.map(st => stationMap[st].notProduced);
+
+            const wrapper = document.getElementById('stationChartWrapper');
+            const minWidthPx = Math.max(wrapper.parentElement.clientWidth, labels.length * 36);
+            wrapper.style.width = `${minWidthPx}px`;
+
+            const axisCfg = getSavedAxisSettings('chart3');
+
+            chartInstances.chart3 = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: '合格 (Pass)', data: passData, backgroundColor: '#10b981', borderRadius: 2 },
+                        { label: '異常 (Issue)', data: issueData, backgroundColor: '#f43f5e', borderRadius: 2 },
+                        { label: '待巡檢 (Pending)', data: pendingData, backgroundColor: '#f59e0b', borderRadius: 2 },
+                        { label: '未生產 (Not Produced)', data: notProducedData, backgroundColor: '#94a3b8', borderRadius: 2 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: false,
+                            ticks: {
+                                autoSkip: false,
+                                maxRotation: 90,
+                                minRotation: 45,
+                                font: { size: 9 }
+                            },
+                            grid: { display: false }
+                        },
+                        y: {
+                            title: { display: true, text: '巡檢筆數', font: { size: 10 } },
+                            min: axisCfg.yMin,
+                            max: axisCfg.yMax,
+                            grid: { color: '#f1f5f9' }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function renderChart3() {
+            const ctx = document.getElementById('stationParetoChart').getContext('2d');
+            if (chartInstances.chart5) chartInstances.chart5.destroy();
+
+            const issueRows = filteredData.filter(r => r.result === '異常');
+            const stationIssueCounts = {};
+
+            issueRows.forEach(r => {
+                const st = r.station || '未指定站點';
+                stationIssueCounts[st] = (stationIssueCounts[st] || 0) + 1;
+            });
+
+            const sorted = Object.keys(stationIssueCounts)
+                .map(k => ({ station: k, count: stationIssueCounts[k] }))
+                .sort((a, b) => b.count - a.count);
+
+            const labels = sorted.map(s => s.station);
+            const counts = sorted.map(s => s.count);
+
+            const totalCount = counts.reduce((a, b) => a + b, 0);
+            let cumulative = 0;
+            const cumPercentages = counts.map(c => {
+                cumulative += c;
+                return totalCount > 0 ? parseFloat(((cumulative / totalCount) * 100).toFixed(1)) : 0;
+            });
+
+            const wrapper = document.getElementById('stationParetoChartWrapper');
+            const minWidthPx = Math.max(wrapper.parentElement.clientWidth, labels.length * 36);
+            wrapper.style.width = `${minWidthPx}px`;
+
+            const axisCfg = getSavedAxisSettings('chart5');
+
+            chartInstances.chart5 = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '站點異常次數',
+                            data: counts,
+                            backgroundColor: 'rgba(147, 51, 234, 0.75)',
+                            borderColor: '#7e22ce',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '累計百分比 (%)',
+                            data: cumPercentages,
+                            type: 'line',
+                            borderColor: '#ec4899',
+                            borderWidth: 2,
+                            pointBackgroundColor: '#be185d',
+                            tension: 0.1,
+                            yAxisID: 'y1',
+                            isPercentage: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const index = activeElements[0].index;
+                            const clickedStation = labels[index];
+                            openStationDefectModal(clickedStation);
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                autoSkip: false,
+                                maxRotation: 90,
+                                minRotation: 45,
+                                font: { size: 9 }
+                            }
+                        },
+                        y: {
+                            position: 'left',
+                            title: { display: true, text: '異常次數', font: { size: 10 } },
+                            min: axisCfg.yMin,
+                            max: axisCfg.yMax,
+                            grid: { color: '#f1f5f9' }
+                        },
+                        y1: {
+                            position: 'right',
+                            title: { display: true, text: '累計 %', font: { size: 10 } },
+                            min: axisCfg.y1Min !== undefined ? axisCfg.y1Min : 0,
+                            max: axisCfg.y1Max !== undefined ? axisCfg.y1Max : 100,
+                            grid: { drawOnChartArea: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                footer: () => '💡 點擊此站點柱狀圖可開啟【該站點異常巡檢內容明細】'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChart4() {
+            const ctx = document.getElementById('paretoChart').getContext('2d');
+            if (chartInstances.chart2) chartInstances.chart2.destroy();
+
+            const issueRows = filteredData.filter(r => r.result === '異常');
+            const contentCounts = {};
+
+            issueRows.forEach(r => {
+                const c = r.content || '未標示異常';
+                contentCounts[c] = (contentCounts[c] || 0) + 1;
+            });
+
+            const sorted = Object.keys(contentCounts)
+                .map(k => ({ content: k, count: contentCounts[k] }))
+                .sort((a, b) => b.count - a.count);
+
+            const labels = sorted.map(s => s.content);
+            const counts = sorted.map(s => s.count);
+
+            const totalCount = counts.reduce((a, b) => a + b, 0);
+            let cumulative = 0;
+            const cumPercentages = counts.map(c => {
+                cumulative += c;
+                return totalCount > 0 ? parseFloat(((cumulative / totalCount) * 100).toFixed(1)) : 0;
+            });
+
+            const axisCfg = getSavedAxisSettings('chart2');
+
+            chartInstances.chart2 = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '異常頻次 (次)',
+                            data: counts,
+                            backgroundColor: 'rgba(245, 158, 11, 0.75)',
+                            borderColor: '#d97706',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '累計百分比 (%)',
+                            data: cumPercentages,
+                            type: 'line',
+                            borderColor: '#ef4444',
+                            borderWidth: 2,
+                            pointBackgroundColor: '#b91c1c',
+                            tension: 0.1,
+                            yAxisID: 'y1',
+                            isPercentage: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const index = activeElements[0].index;
+                            const clickedContent = labels[index];
+                            openContentDailyTrendModal(clickedContent);
+                        }
+                    },
+                    scales: {
+                        y: {
+                            position: 'left',
+                            title: { display: true, text: '異常頻次', font: { size: 10 } },
+                            min: axisCfg.yMin,
+                            max: axisCfg.yMax,
+                            grid: { color: '#f1f5f9' }
+                        },
+                        y1: {
+                            position: 'right',
+                            title: { display: true, text: '累計 %', font: { size: 10 } },
+                            min: axisCfg.y1Min !== undefined ? axisCfg.y1Min : 0,
+                            max: axisCfg.y1Max !== undefined ? axisCfg.y1Max : 100,
+                            grid: { drawOnChartArea: false }
+                        },
+                        x: {
+                            ticks: {
+                                font: { size: 10 },
+                                callback: function(val, idx) {
+                                    const lbl = this.getLabelForValue(val);
+                                    return lbl.length > 8 ? lbl.substring(0, 8) + '...' : lbl;
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                footer: () => '💡 點擊此項目可查看每日發生趨勢'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChart5() {
+            const ctx = document.getElementById('resultChart').getContext('2d');
+            if (chartInstances.chart4) chartInstances.chart4.destroy();
+
+            const resultMap = {};
+            filteredData.forEach(r => {
+                const res = r.result || '其他';
+                resultMap[res] = (resultMap[res] || 0) + 1;
+            });
+
+            const labels = Object.keys(resultMap);
+            const data = labels.map(k => resultMap[k]);
+            const backgroundColors = labels.map(k => {
+                if (k.includes('合格') || k.includes('Pass')) return RESULT_COLORS.Pass.bg;
+                if (k.includes('異常') || k.includes('Issue')) return RESULT_COLORS.Issue.bg;
+                if (k.includes('待巡檢') || k.includes('Pending')) return RESULT_COLORS.Pending.bg;
+                if (k.includes('未生產')) return RESULT_COLORS.NotProduced.bg;
+                return RESULT_COLORS.Other.bg;
+            });
+
+            chartInstances.chart4 = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 12,
+                                font: { size: 11 },
+                                generateLabels: (chart) => {
+                                    const d = chart.data;
+                                    if (d.labels.length && d.datasets.length) {
+                                        const ds = d.datasets[0];
+                                        const tot = ds.data.reduce((a, b) => a + b, 0);
+                                        return d.labels.map((lbl, i) => {
+                                            const val = ds.data[i];
+                                            const pct = tot > 0 ? ((val / tot) * 100).toFixed(1) : '0.0';
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.getStyle(i);
+                                            return {
+                                                text: `${lbl}: ${val}筆 (${pct}%)`,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: isNaN(ds.data[i]) || (meta.data[i] && meta.data[i].hidden),
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const val = context.raw || 0;
+                                    const tot = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const pct = tot > 0 ? ((val / tot) * 100).toFixed(1) : '0.0';
+                                    return ` ${context.label}: ${val} 筆 (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('dataTableBody');
+            const searchVal = document.getElementById('tableSearchInput').value.toLowerCase().trim();
+
+            let data = filteredData.filter(row => {
+                if (!searchVal) return true;
+                return (
+                    row.ipqcDate.toLowerCase().includes(searchVal) ||
+                    row.inspector.toLowerCase().includes(searchVal) ||
+                    row.model.toLowerCase().includes(searchVal) ||
+                    row.station.toLowerCase().includes(searchVal) ||
+                    row.item.toLowerCase().includes(searchVal) ||
+                    row.content.toLowerCase().includes(searchVal) ||
+                    row.machineNo.toLowerCase().includes(searchVal) ||
+                    row.opId.toLowerCase().includes(searchVal) ||
+                    row.result.toLowerCase().includes(searchVal) ||
+                    row.defectDesc.toLowerCase().includes(searchVal) ||
+                    row.workOrder.toLowerCase().includes(searchVal)
+                );
+            });
+
+            // Sorting
+            data.sort((a, b) => {
+                let valA = a[currentSort.column] || '';
+                let valB = b[currentSort.column] || '';
+                if (valA < valB) return currentSort.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return currentSort.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            document.getElementById('recordCountBadge').textContent = `${data.length} 筆記錄`;
+
+            if (data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="14" class="py-12 text-center text-slate-400">
+                            <i class="fa-solid fa-folder-open text-4xl mb-3 block text-slate-300"></i>
+                            沒有符合當前條件的巡檢記錄。
+                        </td>
+                    </tr>
+                `;
+                document.getElementById('paginationInfo').textContent = '顯示第 0 至 0 筆，共 0 筆';
+                document.getElementById('paginationControls').innerHTML = '';
+                return;
+            }
+
+            const totalPages = Math.ceil(data.length / pageSize);
+            if (currentPage > totalPages) currentPage = totalPages;
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, data.length);
+            const pageData = data.slice(startIdx, endIdx);
+
+            tbody.innerHTML = pageData.map(r => {
+                let resultClass = 'bg-slate-100 text-slate-800';
+                if (r.result === '合格') resultClass = RESULT_COLORS.Pass.badge;
+                else if (r.result === '異常') resultClass = RESULT_COLORS.Issue.badge;
+                else if (r.result === '待巡檢') resultClass = RESULT_COLORS.Pending.badge;
+                else if (r.result === '未生產') resultClass = RESULT_COLORS.NotProduced.badge;
+
+                const imgHtml = r.defectImg 
+                    ? `<a href="${r.defectImg}" target="_blank" class="text-indigo-600 hover:underline flex items-center justify-center space-x-1"><i class="fa-solid fa-image"></i><span>照片</span></a>` 
+                    : `<span class="text-slate-300">-</span>`;
+
+                return `
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <td class="py-2.5 px-3 font-mono text-slate-600">${r.ipqcDate}</td>
+                        <td class="py-2.5 px-3 font-mono text-slate-500">${r.ipqcTime}</td>
+                        <td class="py-2.5 px-3 text-slate-700">${r.inspector}</td>
+                        <td class="py-2.5 px-3 font-semibold text-slate-800">${r.model}</td>
+                        <td class="py-2.5 px-3 text-slate-700">${r.station}</td>
+                        <td class="py-2.5 px-3 text-slate-600">${r.item}</td>
+                        <td class="py-2.5 px-3 font-medium text-slate-800">${r.content}</td>
+                        <td class="py-2.5 px-3 font-mono text-slate-500">${r.machineNo}</td>
+                        <td class="py-2.5 px-3 font-mono text-slate-500">${r.opId}</td>
+                        <td class="py-2.5 px-3 text-center">
+                            <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${resultClass}">${r.result}</span>
+                        </td>
+                        <td class="py-2.5 px-3 text-slate-600 truncate max-w-xs" title="${r.defectDesc}">${r.defectDesc}</td>
+                        <td class="py-2.5 px-3 text-center">${imgHtml}</td>
+                        <td class="py-2.5 px-3 font-mono text-slate-600">${r.workOrder}</td>
+                        <td class="py-2.5 px-3 text-slate-400 truncate max-w-xs" title="${r.remarks}">${r.remarks}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('paginationInfo').textContent = `顯示第 ${startIdx + 1} 至 ${endIdx} 筆，共 ${data.length} 筆`;
+
+            let paginationBtns = '';
+            paginationBtns += `
+                <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled class="opacity-40 cursor-not-allowed px-2 py-1 bg-white border border-slate-300 rounded text-slate-600"' : 'class="px-2 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 text-slate-700"'}>
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+            `;
+            paginationBtns += `<span class="px-3 py-1 font-semibold text-slate-700">${currentPage} / ${totalPages}</span>`;
+            paginationBtns += `
+                <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled class="opacity-40 cursor-not-allowed px-2 py-1 bg-white border border-slate-300 rounded text-slate-600"' : 'class="px-2 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 text-slate-700"'}>
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            `;
+            document.getElementById('paginationControls').innerHTML = paginationBtns;
+        }
+
+        function sortTable(col) {
+            if (currentSort.column === col) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = col;
+                currentSort.direction = 'asc';
+            }
+            renderTable();
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            renderTable();
+        }
+
+        function openDailyDefectParetoModal(targetDate) {
+            const dayDefects = filteredData.filter(r => r.ipqcDate === targetDate && r.result === '異常');
+            
+            document.getElementById('modalTitle').textContent = `【日期: ${targetDate}】巡檢異常內容 (G欄) 柏拉圖分析`;
+            document.getElementById('modalSubtitle').textContent = `當日異常總計: ${dayDefects.length} 筆`;
+            document.getElementById('modalIconContainer').className = 'p-2 bg-indigo-600 rounded-lg text-white';
+            document.getElementById('modalIconContainer').innerHTML = '<i class="fa-solid fa-chart-bar"></i>';
+
+            const statsBar = document.getElementById('modalStatsBar');
+            statsBar.innerHTML = `
+                <div class="bg-indigo-50 border border-indigo-100 p-2.5 rounded-lg">
+                    <span class="text-indigo-600 font-semibold block">當日巡檢日期</span>
+                    <span class="text-base font-bold text-slate-800">${targetDate}</span>
+                </div>
+                <div class="bg-rose-50 border border-rose-100 p-2.5 rounded-lg">
+                    <span class="text-rose-600 font-semibold block">異常總筆數</span>
+                    <span class="text-base font-bold text-rose-700">${dayDefects.length} 筆</span>
+                </div>
+                <div class="bg-amber-50 border border-amber-100 p-2.5 rounded-lg col-span-2 sm:col-span-1">
+                    <span class="text-amber-600 font-semibold block">主要不良項目</span>
+                    <span class="text-sm font-bold text-slate-800 truncate block">${getTopItem(dayDefects)}</span>
+                </div>
+            `;
+
+            showModal();
+
+            const contentCounts = {};
+            dayDefects.forEach(r => {
+                const c = r.content || '未標示異常';
+                contentCounts[c] = (contentCounts[c] || 0) + 1;
+            });
+
+            const sorted = Object.keys(contentCounts)
+                .map(k => ({ item: k, count: contentCounts[k] }))
+                .sort((a, b) => b.count - a.count);
+
+            const labels = sorted.map(s => s.item);
+            const counts = sorted.map(s => s.count);
+            const total = dayDefects.length;
+
+            let cum = 0;
+            const cumPercentages = counts.map(c => {
+                cum += c;
+                return total > 0 ? parseFloat(((cum / total) * 100).toFixed(1)) : 0;
+            });
+
+            renderModalChart('bar', labels, [
+                { label: '異常次數', data: counts, backgroundColor: 'rgba(99, 102, 241, 0.8)', borderRadius: 4, yAxisID: 'y' },
+                { label: '累計 %', data: cumPercentages, type: 'line', borderColor: '#ef4444', borderWidth: 2, yAxisID: 'y1', isPercentage: true }
+            ]);
+
+            renderModalTable(sorted, total, '異常巡檢內容');
+
+            setTimeout(() => {
+                if (modalChartInstance) {
+                    modalChartInstance.resize();
+                    modalChartInstance.update();
+                }
+            }, 50);
+        }
+
+        // Feature 2: Weekly Defect Pareto Modal
+        function openWeeklyDefectParetoModal(targetWeek) {
+            const weekDefects = filteredData.filter(r => r.ipqcDate && r.ipqcDate !== '未標示' && getISOWeekStr(new Date(r.ipqcDate)) === targetWeek && r.result === '異常');
+            
+            document.getElementById('modalTitle').textContent = `【週別: ${targetWeek}】巡檢異常內容 (G欄) 柏拉圖分析`;
+            document.getElementById('modalSubtitle').textContent = `當週異常總計: ${weekDefects.length} 筆`;
+            document.getElementById('modalIconContainer').className = 'p-2 bg-blue-600 rounded-lg text-white';
+            document.getElementById('modalIconContainer').innerHTML = '<i class="fa-solid fa-chart-bar"></i>';
+
+            const statsBar = document.getElementById('modalStatsBar');
+            statsBar.innerHTML = `
+                <div class="bg-blue-50 border border-blue-100 p-2.5 rounded-lg">
+                    <span class="text-blue-600 font-semibold block">當週巡檢週別</span>
+                    <span class="text-base font-bold text-slate-800">${targetWeek}</span>
+                </div>
+                <div class="bg-rose-50 border border-rose-100 p-2.5 rounded-lg">
+                    <span class="text-rose-600 font-semibold block">週異常總筆數</span>
+                    <span class="text-base font-bold text-rose-700">${weekDefects.length} 筆</span>
+                </div>
+                <div class="bg-amber-50 border border-amber-100 p-2.5 rounded-lg col-span-2 sm:col-span-1">
+                    <span class="text-amber-600 font-semibold block">主要不良項目</span>
+                    <span class="text-sm font-bold text-slate-800 truncate block">${getTopItem(weekDefects)}</span>
+                </div>
+            `;
+
+            showModal();
+
+            const contentCounts = {};
+            weekDefects.forEach(r => {
+                const c = r.content || '未標示異常';
+                contentCounts[c] = (contentCounts[c] || 0) + 1;
+            });
+
+            const sorted = Object.keys(contentCounts)
+                .map(k => ({ item: k, count: contentCounts[k] }))
+                .sort((a, b) => b.count - a.count);
+
+            const labels = sorted.map(s => s.item);
+            const counts = sorted.map(s => s.count);
+            const total = weekDefects.length;
+
+            let cum = 0;
+            const cumPercentages = counts.map(c => {
+                cum += c;
+                return total > 0 ? parseFloat(((cum / total) * 100).toFixed(1)) : 0;
+            });
+
+            renderModalChart('bar', labels, [
+                { label: '週異常次數', data: counts, backgroundColor: 'rgba(59, 130, 246, 0.8)', borderRadius: 4, yAxisID: 'y' },
+                { label: '累計 %', data: cumPercentages, type: 'line', borderColor: '#f59e0b', borderWidth: 2, yAxisID: 'y1', isPercentage: true }
+            ]);
+
+            renderModalTable(sorted, total, '異常巡檢內容');
+
+            setTimeout(() => {
+                if (modalChartInstance) {
+                    modalChartInstance.resize();
+                    modalChartInstance.update();
+                }
+            }, 50);
+        }
+
+        function openStationDefectModal(targetStation) {
+            const stationDefects = filteredData.filter(r => r.station === targetStation && r.result === '異常');
+
+            document.getElementById('modalTitle').textContent = `【站點: ${targetStation}】巡檢異常項目與發生趨勢`;
+            document.getElementById('modalSubtitle').textContent = `該站點異常總計: ${stationDefects.length} 筆`;
+            document.getElementById('modalIconContainer').className = 'p-2 bg-purple-600 rounded-lg text-white';
+            document.getElementById('modalIconContainer').innerHTML = '<i class="fa-solid fa-industry"></i>';
+
+            const statsBar = document.getElementById('modalStatsBar');
+            statsBar.innerHTML = `
+                <div class="bg-purple-50 border border-purple-100 p-2.5 rounded-lg">
+                    <span class="text-purple-600 font-semibold block">巡檢站點</span>
+                    <span class="text-base font-bold text-slate-800">${targetStation}</span>
+                </div>
+                <div class="bg-rose-50 border border-rose-100 p-2.5 rounded-lg">
+                    <span class="text-rose-600 font-semibold block">累積異常筆數</span>
+                    <span class="text-base font-bold text-rose-700">${stationDefects.length} 筆</span>
+                </div>
+                <div class="bg-amber-50 border border-amber-100 p-2.5 rounded-lg col-span-2 sm:col-span-1">
+                    <span class="text-amber-600 font-semibold block">最常發生的異常</span>
+                    <span class="text-sm font-bold text-slate-800 truncate block">${getTopItem(stationDefects)}</span>
+                </div>
+            `;
+
+            showModal();
+
+            const itemCounts = {};
+            stationDefects.forEach(r => {
+                const item = r.content || r.item || '未指定';
+                itemCounts[item] = (itemCounts[item] || 0) + 1;
+            });
+
+            const sorted = Object.keys(itemCounts)
+                .map(k => ({ item: k, count: itemCounts[k] }))
+                .sort((a, b) => b.count - a.count);
+
+            const labels = sorted.map(s => s.item);
+            const counts = sorted.map(s => s.count);
+            const total = stationDefects.length;
+
+            let cum = 0;
+            const cumPercentages = counts.map(c => {
+                cum += c;
+                return total > 0 ? parseFloat(((cum / total) * 100).toFixed(1)) : 0;
+            });
+
+            renderModalChart('bar', labels, [
+                { label: '異常次數', data: counts, backgroundColor: 'rgba(147, 51, 234, 0.8)', borderRadius: 4, yAxisID: 'y' },
+                { label: '累計 %', data: cumPercentages, type: 'line', borderColor: '#ec4899', borderWidth: 2, yAxisID: 'y1', isPercentage: true }
+            ]);
+
+            renderModalTable(sorted, total, '站點異常內容');
+
+            setTimeout(() => {
+                if (modalChartInstance) {
+                    modalChartInstance.resize();
+                    modalChartInstance.update();
+                }
+            }, 50);
+        }
+
+        function openContentDailyTrendModal(targetContent) {
+            const contentRows = filteredData.filter(r => r.content === targetContent && r.result === '異常');
+
+            document.getElementById('modalTitle').textContent = `【異常內容: ${targetContent}】每日發生次數趨勢`;
+            document.getElementById('modalSubtitle').textContent = `全期間累計發生: ${contentRows.length} 筆`;
+            document.getElementById('modalIconContainer').className = 'p-2 bg-amber-600 rounded-lg text-white';
+            document.getElementById('modalIconContainer').innerHTML = '<i class="fa-solid fa-chart-line"></i>';
+
+            const dailyCounts = {};
+            contentRows.forEach(r => {
+                if (!r.ipqcDate || r.ipqcDate === '未標示') return;
+                dailyCounts[r.ipqcDate] = (dailyCounts[r.ipqcDate] || 0) + 1;
+            });
+
+            const labels = Object.keys(dailyCounts).sort();
+            const counts = labels.map(d => dailyCounts[d]);
+            const total = contentRows.length;
+
+            const statsBar = document.getElementById('modalStatsBar');
+            statsBar.innerHTML = `
+                <div class="bg-amber-50 border border-amber-100 p-2.5 rounded-lg col-span-2">
+                    <span class="text-amber-700 font-semibold block">異常內容名稱</span>
+                    <span class="text-base font-bold text-slate-800 truncate block" title="${targetContent}">${targetContent}</span>
+                </div>
+                <div class="bg-rose-50 border border-rose-100 p-2.5 rounded-lg">
+                    <span class="text-rose-600 font-semibold block">累計發生頻次</span>
+                    <span class="text-base font-bold text-rose-700">${total} 次</span>
+                </div>
+            `;
+
+            showModal();
+
+            renderModalChart('line', labels, [
+                {
+                    label: '每日發生次數',
+                    data: counts,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#d97706',
+                    fill: true,
+                    tension: 0.2
+                }
+            ]);
+
+            const tableData = labels.map(d => ({ item: d, count: dailyCounts[d] }));
+            renderModalTable(tableData, total, '發生日期', '當日次數');
+
+            setTimeout(() => {
+                if (modalChartInstance) {
+                    modalChartInstance.resize();
+                    modalChartInstance.update();
+                }
+            }, 50);
+        }
+
+        function renderModalChart(type, labels, datasets) {
+            const ctx = document.getElementById('modalChartCanvas').getContext('2d');
+            if (modalChartInstance) modalChartInstance.destroy();
+
+            const hasY1 = datasets.some(d => d.yAxisID === 'y1');
+
+            const scalesConfig = {
+                x: { ticks: { font: { size: 10 } } },
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: '次數', font: { size: 10 } },
+                    grid: { color: '#f1f5f9' },
+                    beginAtZero: true
+                }
+            };
+
+            if (hasY1) {
+                scalesConfig.y1 = {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: true, text: '百分比 (%)', font: { size: 10 } },
+                    min: 0,
+                    max: 100,
+                    grid: { drawOnChartArea: false }
+                };
+            }
+
+            modalChartInstance = new Chart(ctx, {
+                type: type,
+                data: { labels: labels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: scalesConfig,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function renderModalTable(sortedData, totalCount, labelColName = '項目名稱', countColName = '異常次數') {
+            document.getElementById('modalTableHeading').textContent = `${labelColName} 細部清單`;
+            document.getElementById('modalTableCountBadge').textContent = `${sortedData.length} 項紀錄`;
+
+            const headerRow = document.getElementById('modalTableHeaderRow');
+            headerRow.innerHTML = `
+                <th class="py-2 px-3">${labelColName}</th>
+                <th class="py-2 px-3 text-center">${countColName}</th>
+                <th class="py-2 px-3 text-center">次數占比</th>
+                <th class="py-2 px-3 text-center">累計百分比</th>
+            `;
+
+            const tbody = document.getElementById('modalTableBody');
+            if (sortedData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400">尚無詳細數據</td></tr>`;
+                return;
+            }
+
+            let cum = 0;
+            tbody.innerHTML = sortedData.map(row => {
+                cum += row.count;
+                const pct = totalCount > 0 ? ((row.count / totalCount) * 100).toFixed(1) : '0.0';
+                const cumPct = totalCount > 0 ? ((cum / totalCount) * 100).toFixed(1) : '0.0';
+
+                return `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-2 px-3 font-medium text-slate-700">${row.item}</td>
+                        <td class="py-2 px-3 text-center font-bold text-slate-900">${row.count}</td>
+                        <td class="py-2 px-3 text-center text-slate-600">${pct}%</td>
+                        <td class="py-2 px-3 text-center font-semibold text-indigo-600">${cumPct}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getTopItem(rows) {
+            if (!rows || rows.length === 0) return '無';
+            const counts = {};
+            rows.forEach(r => {
+                const key = r.content || r.item || '未指定';
+                counts[key] = (counts[key] || 0) + 1;
+            });
+            return Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || '無';
+        }
+
+        function showModal() {
+            document.getElementById('drillDownModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('drillDownModal').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function exportToCSV() {
+            if (filteredData.length === 0) {
+                showToast('目前無數據可供匯出！');
+                return;
+            }
+
+            const headers = ['A.巡檢日期', 'B.巡檢時間', 'C.巡檢員', 'D.機種', 'E.站點', 'F.巡檢項目', 'G.巡檢內容', 'H.機台財編', 'I.人員工號', 'J.巡檢結果', 'K.異常描述', 'L.異常圖片', 'M.工單', 'N.備註'];
+            
+            const rows = filteredData.map(r => [
+                `"${r.ipqcDate}"`,
+                `"${r.ipqcTime}"`,
+                `"${r.inspector}"`,
+                `"${r.model}"`,
+                `"${r.station}"`,
+                `"${r.item}"`,
+                `"${r.content}"`,
+                `"${r.machineNo}"`,
+                `"${r.opId}"`,
+                `"${r.result}"`,
+                `"${(r.defectDesc || '').replace(/"/g, '""')}"`,
+                `"${r.defectImg}"`,
+                `"${r.workOrder}"`,
+                `"${(r.remarks || '').replace(/"/g, '""')}"`
+            ]);
+
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `IPQC_Inspection_Export_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('已成功匯出 CSV 明細檔案！');
+        }
+
+        function showToast(msg) {
+            let toast = document.getElementById('toastNotification');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toastNotification';
+                toast.className = 'fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-medium flex items-center space-x-2 transition-all duration-300 opacity-0 transform translate-y-2';
+                document.body.appendChild(toast);
+            }
+            toast.innerHTML = `<i class="fa-solid fa-circle-info text-indigo-400"></i><span>${msg}</span>`;
+            toast.classList.remove('opacity-0', 'translate-y-2');
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
